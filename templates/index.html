@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>📊 Wikipedia vs Grokipedia Analysis</h1>
+    <p class="lead">AI-powered content comparison and trust verification</p>
+    
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5>Topics Analyzed</h5>
+                    <h2 id="topics-count">0 / 54</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5>Discrepancies Found</h5>
+                    <h2 id="disc-count">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5>Avg Similarity</h5>
+                    <h2 id="avg-sim">0%</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="mb-4">
+        <button class="btn btn-primary btn-lg" id="scan-btn" onclick="startScan()">
+            🚀 Start Scanning
+        </button>
+        <span id="progress-text" class="ms-3"></span>
+    </div>
+    
+    <!-- Progress Bar -->
+    <div id="progress-container" style="display:none;">
+        <div class="progress mb-3" style="height: 25px;">
+            <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                 role="progressbar" style="width: 0%">
+                <span id="progress-percent">0%</span>
+            </div>
+        </div>
+        <p id="current-topic">Scanning...</p>
+    </div>
+    
+    <!-- Results Table -->
+    <div class="table-responsive mt-4">
+        <table class="table table-striped" id="results-table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>Topic</th>
+                    <th>Similarity</th>
+                    <th>Discrepancies</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function startScan() {
+    document.getElementById('scan-btn').disabled = true;
+    document.getElementById('progress-container').style.display = 'block';
+    
+    fetch('/api/scan', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            checkProgress();
+        })
+        .catch(err => {
+            console.error('Scan failed:', err);
+            alert('Failed to start scan');
+            document.getElementById('scan-btn').disabled = false;
+        });
+}
+
+function checkProgress() {
+    fetch('/api/scan-status')
+        .then(r => r.json())
+        .then(data => {
+            const progress = data.progress || 0;
+            document.getElementById('progress-bar').style.width = progress + '%';
+            document.getElementById('progress-percent').textContent = progress + '%';
+            document.getElementById('current-topic').textContent = `Currently scanning: ${data.current_topic}`;
+            document.getElementById('progress-text').textContent = `${progress}% complete`;
+            
+            if (data.status !== 'completed') {
+                setTimeout(checkProgress, 1000);
+            } else {
+                loadResults();
+            }
+        });
+}
+
+function loadResults() {
+    fetch('/api/topics')
+        .then(r => r.json())
+        .then(topics => {
+            document.getElementById('results-table').style.display = 'table';
+            const tbody = document.getElementById('table-body');
+            
+            let completedCount = 0;
+            let totalDisc = 0;
+            let totalSim = 0;
+            
+            tbody.innerHTML = topics.map(t => {
+                if (t.status === 'completed') {
+                    completedCount++;
+                    totalDisc += t.discrepancies;
+                    totalSim += t.similarity;
+                }
+                
+                const rowClass = t.similarity >= 0.8 ? 'table-success' : 
+                                t.similarity >= 0.6 ? 'table-warning' : 
+                                t.similarity > 0 ? 'table-danger' : '';
+                
+                return `
+                    <tr class="${rowClass}">
+                        <td>${t.name}</td>
+                        <td>${Math.round(t.similarity * 100)}%</td>
+                        <td>${t.discrepancies}</td>
+                        <td>${t.status}</td>
+                        <td><a href="/comparison/${encodeURIComponent(t.name)}" class="btn btn-sm btn-info">View</a></td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Update stats
+            document.getElementById('topics-count').textContent = `${completedCount} / ${topics.length}`;
+            document.getElementById('disc-count').textContent = totalDisc;
+            document.getElementById('avg-sim').textContent = completedCount > 0 ? 
+                Math.round((totalSim / completedCount) * 100) + '%' : '0%';
+        });
+}
+
+// Load existing results on page load
+window.addEventListener('load', () => {
+    fetch('/api/topics')
+        .then(r => r.json())
+        .then(topics => {
+            const hasCompleted = topics.some(t => t.status === 'completed');
+            if (hasCompleted) {
+                loadResults();
+            }
+        });
+});
+</script>
+{% endblock %}
