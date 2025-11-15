@@ -18,7 +18,7 @@ BLOCKCHAIN_CHAIN_ID = 20430  # NeuroWeb Testnet
 BLOCKCHAIN_RPC = "https://testnet-rpc.neuroweb.ai"
 
 # Cerebras Configuration
-CEREBRAS_MODEL = "llama3.1-8b"
+CEREBRAS_MODEL = "qwen-3-235b-a22b-instruct-2507"
 CEREBRAS_MAX_TOKENS = 2048
 CEREBRAS_TEMPERATURE = 0.6
 CEREBRAS_TOP_P = 0.95
