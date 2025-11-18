@@ -12,50 +12,43 @@ logger = logging.getLogger(__name__)
 
 
 class DKGPublisher:
-    """Publishes Community Notes to OriginTrail Decentralized Knowledge Graph"""
+    """
+    Publishes Community Notes to OriginTrail Decentralized Knowledge Graph
+    
+    IMPORTANT: This uses the official DKG Edge Node service (dkg-service.js)
+    which implements the official OriginTrail DKG SDK (dkg.js).
+    
+    This is the ONLY approved method for hackathon eligibility.
+    """
     
     def __init__(self):
-        # CORRECT ENDPOINT - DKG Gateway (not RPC)
-        self.endpoint = "https://dkg-testnet.dev3.sh"
-        self.port = 8900
-        self.public_key = "0xec2C84d2AE3C7e385beAbcC77a96cfaE89301E4B"
-        self.private_key = "0x2ebe8108da2b7e851ddc98a07b161cee1ce824b0504e3b8c31744ea8547fcbbd"
+        # Connect to local DKG Edge Node service
+        self.dkg_service_url = os.getenv('DKG_SERVICE_URL', 'http://localhost:3000')
+        logger.info(f"🔗 Connecting to DKG Edge Node: {self.dkg_service_url}")
 
-    def _format_knowledge_asset(self, data):
+    def check_health(self):
         """
-        Format data as JSON-LD Knowledge Asset with ActivityStreams context
+        Check if DKG Edge Node service is running
         
-        Args:
-            data: Dict with topic, discrepancies, similarity_score, ai_analysis
-            
         Returns:
-            JSON-LD formatted knowledge asset
+            bool: True if service is healthy
         """
-        verification_status = "verified" if data['similarity_score'] > 0.85 else "needs_review"
-        
-        return {
-            "@context": "https://www.w3.org/ns/activitystreams",
-            "@type": "Note",
-            "id": f"urn:uuid:{uuid.uuid4()}",
-            "attributedTo": "wikipedia-grokipedia-comparison-agent",
-            "published": datetime.utcnow().isoformat() + "Z",
-            "inReplyTo": f"topic:{data['topic']}",
-            "name": f"Content Comparison: {data['topic']}",
-            "content": f"Comparison of {data['topic']} between Wikipedia and Grokipedia",
-            "data": {
-                "topic": data['topic'],
-                "similarity_score": data['similarity_score'],
-                "discrepancies": data['discrepancies'],
-                "ai_analysis": data['ai_analysis'],
-                "verification_status": verification_status,
-                "source": "Wikipedia vs Grokipedia Comparison System",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        }
+        try:
+            response = requests.get(f"{self.dkg_service_url}/health", timeout=5)
+            if response.status_code == 200:
+                logger.info("✅ DKG Edge Node service is healthy")
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"⚠️ DKG Edge Node service not available: {str(e)}")
+            return False
     
     def publish_community_note(self, topic, discrepancies, similarity_score, ai_analysis):
         """
-        Publish Community Note to DKG testnet gateway
+        Publish Community Note to DKG using official DKG Edge Node
+        
+        This method communicates with the DKG Edge Node service (dkg-service.js)
+        which uses the official OriginTrail DKG SDK (dkg.js).
         
         Args:
             topic: Topic name
@@ -64,63 +57,82 @@ class DKGPublisher:
             ai_analysis: AI analysis text
             
         Returns:
-            UAL (Universal Asset Locator) string or None if failed
+            UAL (Universal Asset Locator) string
         """
         try:
-            # Format knowledge asset
-            knowledge_asset = self._format_knowledge_asset({
-                'topic': topic,
-                'discrepancies': discrepancies,
-                'similarity_score': similarity_score,
-                'ai_analysis': ai_analysis
-            })
-            
-            # Prepare request for DKG gateway
+            # Prepare payload for DKG Edge Node service
             payload = {
-                "public_key": self.public_key,
-                "assertion": knowledge_asset,
-                "blockchain": "neuroweb-testnet",
-                "visibility": "public"
+                "topic": topic,
+                "discrepancies": discrepancies,
+                "similarity_score": similarity_score,
+                "ai_analysis": ai_analysis
             }
             
-            # POST to DKG gateway (CORRECT ENDPOINT)
-            url = f"{self.endpoint}:{self.port}/api/v1/assets/create"
+            logger.info(f"📤 Publishing to DKG via Edge Node: {topic}")
             
-            logger.info(f"📤 Publishing to DKG: {topic}")
-            logger.info(f"   Endpoint: {url}")
-            
+            # POST to DKG Edge Node service
             response = requests.post(
-                url,
+                f"{self.dkg_service_url}/publish",
                 json=payload,
                 headers={'Content-Type': 'application/json'},
+                timeout=60  # DKG operations can take time
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    ual = result.get('ual')
+                    logger.info(f"✅ Published to DKG: {topic}")
+                    logger.info(f"   UAL: {ual}")
+                    if result.get('transaction_hash'):
+                        logger.info(f"   TX: {result.get('transaction_hash')}")
+                    return ual
+                else:
+                    logger.error(f"❌ DKG publish failed: {result.get('error')}")
+                    return None
+            else:
+                logger.error(f"❌ DKG service error: {response.status_code}")
+                logger.error(f"   Response: {response.text[:200]}")
+                return None
+                
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"❌ Cannot connect to DKG Edge Node service")
+            logger.error(f"   Make sure 'npm start' is running on port 3000")
+            logger.error(f"   Error: {str(e)}")
+            return None
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"❌ DKG publish timeout for {topic}")
+            logger.error(f"   DKG operations can take 30-60 seconds")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ DKG publish failed for {topic}: {str(e)}")
+            return None
+    
+    def get_asset(self, ual):
+        """
+        Retrieve a Knowledge Asset from DKG by UAL
+        
+        Args:
+            ual: Universal Asset Locator
+            
+        Returns:
+            dict: Asset data or None if failed
+        """
+        try:
+            response = requests.get(
+                f"{self.dkg_service_url}/asset/{ual}",
                 timeout=30
             )
             
-            if response.status_code in [200, 201]:
+            if response.status_code == 200:
                 result = response.json()
-                ual = result.get('ual', result.get('UAL', f"did:dkg:{topic}:{uuid.uuid4()}"))
-                logger.info(f"✓ Published to DKG: {topic} -> {ual}")
-                return ual
-            else:
-                logger.error(f"✗ DKG publish failed for {topic}: {response.status_code}")
-                logger.error(f"   Response: {response.text[:200]}")
-                # Return mock UAL for demo purposes
-                mock_ual = f"did:dkg:neuroweb-testnet:{uuid.uuid4()}"
-                logger.info(f"⚠ Using mock UAL: {mock_ual}")
-                return mock_ual
-                
-        except requests.exceptions.ConnectionError as e:
-            logger.warning(f"⚠ DKG connection failed for {topic}: {str(e)}")
-            return f"did:dkg:neuroweb-testnet:{uuid.uuid4()}"
+                if result.get('success'):
+                    return result.get('asset')
             
-        except requests.exceptions.Timeout:
-            logger.error(f"✗ DKG publish timeout for {topic}")
-            return f"did:dkg:neuroweb-testnet:{uuid.uuid4()}"
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"✗ DKG publish request failed for {topic}: {str(e)}")
-            return f"did:dkg:neuroweb-testnet:{uuid.uuid4()}"
+            return None
             
         except Exception as e:
-            logger.error(f"✗ DKG publish failed for {topic}: {str(e)}")
-            return f"did:dkg:neuroweb-testnet:{uuid.uuid4()}"
+            logger.error(f"❌ Failed to retrieve asset {ual}: {str(e)}")
+            return None

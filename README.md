@@ -33,10 +33,12 @@ An AI-powered content comparison and trust annotation system that analyzes artic
 ## 📦 Installation
 
 ### Prerequisites
-- Python 3.9 or higher
-- pip package manager
-- Pinecone API key (free tier)
-- Cerebras API keys (provided)
+- **Python 3.9+** with pip
+- **Node.js 16+** with npm
+- **Pinecone API key** (free tier)
+- **Cerebras API keys** (provided)
+- **OriginTrail DKG Node** (local or remote)
+- **Wallet with testnet tokens** (NEURO + TRAC)
 
 ### Setup Steps
 
@@ -46,15 +48,16 @@ git clone <repository-url>
 cd hackathon-project
 ```
 
-2. **Create virtual environment**
+2. **Install Python dependencies**
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-3. **Install dependencies**
+3. **Install Node.js dependencies (DKG SDK)**
 ```bash
-pip install -r requirements.txt
+npm install
 ```
 
 4. **Configure environment variables**
@@ -62,24 +65,42 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `.env` and add your API keys:
-```
-PINECONE_API_KEY=your_pinecone_api_key_here
-DKG_ENDPOINT=https://dkg-testnet.origin-trail.io
-DKG_API_KEY=your_dkg_api_key_here
+Edit `.env` and add your credentials:
+```bash
+# Pinecone
+PINECONE_API_KEY=your_pinecone_api_key
+
+# DKG Edge Node (uses official OriginTrail SDK)
+DKG_SERVICE_URL=http://localhost:3000
+DKG_ENDPOINT=http://localhost:8900
+DKG_PUBLIC_KEY=0xYourPublicAddress
+DKG_PRIVATE_KEY=0xYourPrivateKey
+
+# Flask
 FLASK_DEBUG=True
 FLASK_PORT=5000
 ```
 
-5. **Run the application**
+5. **Start DKG Edge Node service** (separate terminal)
+```bash
+npm start
+```
+
+6. **Start Python Flask app** (separate terminal)
 ```bash
 python app.py
 ```
 
-6. **Access the dashboard**
-Open your browser and navigate to:
+7. **Access the dashboard**
 ```
 http://localhost:5000
+```
+
+### Quick Test
+
+Test DKG integration:
+```bash
+node test-dkg.js
 ```
 
 ## 🎯 Usage
