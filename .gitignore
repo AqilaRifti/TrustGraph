@@ -1,6 +1,6 @@
 # Environment variables
 .env
-
+.kiro
 # Python
 __pycache__/
 *.py[cod]
