@@ -17,6 +17,7 @@ lib/
 lib64/
 parts/
 sdist/
+dkg-node/node_modules
 var/
 wheels/
 *.egg-info/
